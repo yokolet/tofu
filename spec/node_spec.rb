@@ -81,6 +81,107 @@ RSpec.describe "TestNode" do
       node = doc.css(css_sel).first
       expect(node).to_not be_nil
     end
+    # verify css_path method later
     # memo: div[2] causes an error
+    # also below causes an error
+    # node = doc.xpath("//div[count(preceding-sibling::*)=1]")
   end
+
+  <<-TEST
+    assert_nil(@html.meta_encoding)
+  TEST
+  it "returns nil when encoding is not specified" do
+    meta = meta_encoding(html)
+    expect(meta).to be_nil
+  end
+
+  <<-TEST
+    assert(desc = @html.at("a.bar").description)
+    assert_equal("a", desc.name)
+  TEST
+  it "shows a description" do
+    node = html.css("a.bar").first
+    expect(node).not_to be_nil
+    expect(node.tag).to eq("a")
+  end
+
+  <<-TEST
+    assert(node = @html.at("a.bar").child)
+    assert(list = node.ancestors(".baz"))
+    assert_equal(1, list.length)
+    assert_equal("div", list.first.name)
+  TEST
+  it "finds ancestors" do
+    node = html.css("a.bar").first.first_child
+    expect(node.parent).not_to be_nil
+    list = ancestors(html, node, ".baz")
+    expect(list.length).to eq(1)
+    expect(list.first.tag).to eq("div")
+  end
+
+  <<-TEST
+    assert(node = @html.at("a.bar"))
+    assert(node.matches?("a.bar"))
+
+    assert(node = @html.at("//a"))
+    assert(node.matches?("//a"))
+  TEST
+  xit "finds matched node" do
+    css = html.css("a.bar").first
+    xpath = html.xpath("//a").first
+    # needs the matches? method
+  end
+
+  <<-TEST
+    node = @html.at("a")
+    node.unlink
+
+    assert_raises(RuntimeError) { node.add_previous_sibling(@html.at("div")) }
+  TEST
+  xit "unlinks matched node" do
+    node = html.css("a").first
+    # needs the unlink method
+  end
+end
+
+def meta_encoding(document)
+  if (meta = document.xpath("//meta[@charset]").first)
+    meta.attributes[:charset]
+  elsif (meta = meta_content_type(document).first)
+    meta.attributes["content"][/charset\s*=\s*([\w-]+)/i, 1]
+  end
+end
+
+def meta_content_type(document)
+  # NameError: uninitialized constant Gammo::XPath::AST::AndExpr
+  # document.xpath("//meta[@http-equiv and boolean(@content)]").find do |node|
+  #   node["http-equiv"] =~ /\AContent-Type\z/i
+  # end
+  document.xpath("//meta[@http-equiv]") do |node|
+    node.attributes["http-equiv"] =~ /\AContent-Type\z/i
+  end
+end
+
+def ancestors(document, node, selector = nil)
+  return Gammo::CSSSelector::NodeSet.new unless node.respond_to?(:parent)
+  return Gammo::CSSSelector::NodeSet.new unless node.parent
+
+  parents = [node.parent]
+
+  while parents.last.respond_to?(:parent)
+    break unless (ctx_parent = parents.last.parent)
+
+    parents << ctx_parent
+  end
+
+  node_set = Gammo::CSSSelector::NodeSet.new
+  search_result = selector ? html.css(selector) : nil
+  parents.each do |parent|
+    if selector
+      node_set << parent if search_result.nodes.include?(parent)
+    else
+      node_set << parent
+    end
+  end
+  node_set
 end
